@@ -10,6 +10,10 @@ from Crypto.Cipher import AES
 from Crypto import Random
 import uuid
 import time
+import click
+from PIL.ExifTags import TAGS
+from datetime import datetime
+
 
 
 def rgb2hex(rgb):
@@ -35,20 +39,32 @@ def convert_to_rgb_mode(img):
 
 def img_to_rgb_list(img):
     rgb_list = []
+    print(img.size[0])
+    print(img.size[1])
     for i in range(0,img.size[0]):
         for j in range(0,img.size[1]):
-            color = img.getpixel((j,i))
+            color = img.getpixel((i,j))
             for k in range(0,3):
                 rgb_list.append(color[k])
     return rgb_list
 
 
 def img_to_hex(img):
+    print(img.size)
+    # count = None
+    # print(img.getpixel((399,399)))
+    # (3024, 4032)
     hex_str = ""
-    for i in range(0,img.size[0]):
-        for j in range(0,img.size[1]):
-            color = img.getpixel((j,i))
-            hex_str += rgb2hex(color)
+    try:
+        for i in range(0,img.size[0]):
+            for j in range(0,img.size[1]):
+                # count = (i, j)
+                color = img.getpixel((i, j))
+                hex_str += rgb2hex(color)
+    except:
+        # print(count)
+        print("error avi")
+    
     return hex_str
 
 
@@ -63,13 +79,14 @@ def hex_list_to_rgb_list(img_hex_data_list):
 
 def get_hash_from_rgb_list(rgb_list, img_size):
     sha256_hash = hashlib.sha256()
-    img2 = Image.frombytes('RGB', (img_size[0],img_size[1]), bytes(rgb_list), 'raw')
+    img2 = Image.frombytes('RGB', (img_size[1],img_size[0]), bytes(rgb_list), 'raw')
+    img2 = img2.transpose(Image.TRANSPOSE)
     filename = str(uuid.uuid4().hex + ".jpg")
     img2.save(filename)
     with open(filename, "rb") as file:
         for byte_block in iter(lambda: file.read(4096),b""):
             sha256_hash.update(byte_block)
-    os.remove(filename)
+    # os.remove(filename)
     return sha256_hash.hexdigest()
 
 
@@ -91,7 +108,8 @@ def create_valid_hex_list(str_hex_data):
 
 
 def create_img_from_rgb_list(rgb_list, img_size, img_hash):
-    img2 = Image.frombytes('RGB', (img_size[0],img_size[1]), bytes(rgb_list), 'raw')
+    img2 = Image.frombytes('RGB', (img_size[1],img_size[0]), bytes(rgb_list), 'raw')
+    img2 = img2.transpose(Image.TRANSPOSE)
     img2.save(img_hash + ".jpg")
 
 
@@ -137,10 +155,33 @@ def main():
                 raise Exception("path_error")
 
             img = Image.open(img_path)
+            # img.save("temp.jpg")
+            # img = Image.open(img_path)
             if img.mode != 'RGB':
+                print("converting..")
                 img = convert_to_rgb_mode(img)
                 img = img.copy()
 
+            # Test code
+            # print(img.info)
+            # print(img.format_description)
+            # print(img.fp)
+            # print(img.tile)
+            
+            exifdata = img.getexif()
+            for tagid in exifdata:
+                tagname = TAGS.get(tagid, tagid)
+                value = exifdata.get(tagid)
+                if tagname == "DateTime":
+                    print(type(value))
+                    # print(value)
+                    # 2021:08:23 15:52:39
+                    curr_date = datetime.strptime(value, '%Y:%m:%d %H:%M:%S')
+                    # print(json.loads(str(curr_date)))
+                    print(curr_date)
+                    # print(type(curr_date))
+                    # print(curr_date)
+            # End of test code
             img_hex_data_str = img_to_hex(img)
             img_rgb_list = img_to_rgb_list(img)
             img_hash = get_hash_from_rgb_list(img_rgb_list, img.size)
@@ -165,7 +206,9 @@ def main():
             img_decrypted_data_str = decrypt_img_data(key=img_hash.encode(),source=img_hex_encrypted_data_str)
 
             img_hex_list = create_valid_hex_list(img_decrypted_data_str)
+            print(len(img_hex_list))
             img_rgb_list = hex_list_to_rgb_list(img_hex_list)
+            print(len(img_rgb_list))
             create_img_from_rgb_list(img_rgb_list, img_size, img_hash)
 
     except Exception as error:
@@ -180,13 +223,27 @@ def main():
 
 
 
+@click.command()
+# @click.option('--name', default='', help='Your name')
+@click.argument('f', type=click.Path(exists=True))
+def say_hello(f):
+    # click.echo("Hello {}!".format(name))
+    click.echo(click.format_filename(f))
 
+@click.command()
+@click.option('-i', default='', help='Image path')
+@click.argument('file_path')
+def hello(count, file_path):
+    for x in range(count):
+        click.echo('Hello %s!' % file_path)
 
 
 if __name__ == "__main__":
     os.system('cls' if os.name == 'nt' else 'clear')
-    cprint(figlet_format('Mr Grey', font='starwars'),'yellow', attrs=['bold'])
+    # cprint(figlet_format('Mr Grey', font='starwars'),'yellow', attrs=['bold'])
     print("This tool allows you to encode an image, you can also protect your image using AES-256.")
     print()
+    # say_hello()
+    # hello()
 
     main()
